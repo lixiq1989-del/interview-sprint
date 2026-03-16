@@ -1,4 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 
 const SYSTEM_PROMPT = `你是一位专业的求职面试准备顾问，拥有10年+面试辅导经验。
@@ -89,15 +88,13 @@ export async function POST(req: NextRequest) {
     // Verify access code
     const validCode = (process.env.ACCESS_CODE || "lemontalk2026").trim();
     if (!accessCode || accessCode.trim() !== validCode) {
-      return NextResponse.json({ error: `访问码无效` }, { status: 401 });
+      return NextResponse.json({ error: "访问码无效" }, { status: 401 });
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = process.env.DEEPSEEK_API_KEY;
     if (!apiKey) {
       return NextResponse.json({ error: "服务端未配置 API Key" }, { status: 500 });
     }
-
-    const client = new Anthropic({ apiKey });
 
     const resumeSection = resumeText?.trim()
       ? `候选人简历：\n${resumeText.trim()}`
@@ -109,14 +106,33 @@ export async function POST(req: NextRequest) {
       .replace("{jd}", jd?.trim() || "（未提供详细JD）")
       .replace("{resume_section}", resumeSection);
 
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 5000,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: prompt }],
+    // Call DeepSeek API (OpenAI-compatible)
+    const response = await fetch("https://api.deepseek.com/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: 5000,
+        temperature: 0.7,
+      }),
     });
 
-    let raw = (response.content[0] as { type: "text"; text: string }).text.trim();
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`DeepSeek API error: ${response.status} ${err}`);
+    }
+
+    const result = await response.json();
+    let raw = result.choices?.[0]?.message?.content?.trim() || "";
+
+    // Strip markdown code block if present
     if (raw.startsWith("```")) {
       const lines = raw.split("\n");
       raw = lines.slice(1, -1).join("\n");
