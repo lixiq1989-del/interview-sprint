@@ -275,16 +275,27 @@ function CheatsheetView({ data, company, role }: { data: CheatsheetData; company
 }
 
 export default function Home() {
-  const [apiKey, setApiKey] = useState("");
+  const [accessCode, setAccessCode] = useState("");
+  const [loggedIn, setLoggedIn] = useState(false);
   const [company, setCompany] = useState("");
   const [role, setRole] = useState("");
   const [jd, setJd] = useState("");
   const [resumeText, setResumeText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [loginError, setLoginError] = useState("");
   const [result, setResult] = useState<{ data: CheatsheetData; company: string; role: string } | null>(null);
 
-  const canGenerate = apiKey && (company || role) && (jd || resumeText);
+  const canGenerate = (company || role) && (jd || resumeText);
+
+  const handleLogin = () => {
+    if (!accessCode.trim()) {
+      setLoginError("请输入访问码");
+      return;
+    }
+    setLoginError("");
+    setLoggedIn(true);
+  };
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -293,10 +304,16 @@ export default function Home() {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company, role, jd, resumeText, apiKey }),
+        body: JSON.stringify({ company, role, jd, resumeText, accessCode }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "生成失败");
+      if (!res.ok) {
+        if (res.status === 401) {
+          setLoggedIn(false);
+          throw new Error("访问码无效，请重新登录");
+        }
+        throw new Error(data.error || "生成失败");
+      }
       setResult({ data, company: company || "未知公司", role: role || "未知岗位" });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "生成失败，请重试");
@@ -305,6 +322,7 @@ export default function Home() {
     }
   };
 
+  // Result view
   if (result) {
     return (
       <div className="min-h-screen bg-slate-50 py-8 px-4">
@@ -321,10 +339,45 @@ export default function Home() {
     );
   }
 
+  // Login view
+  if (!loggedIn) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <div className="max-w-sm w-full">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-slate-900 mb-2">⚡ Interview Sprint</h1>
+            <p className="text-slate-500">晋级突击 · 面试小抄生成器</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+            <label className="block text-sm font-medium text-slate-700 mb-2">输入访问码</label>
+            <input
+              type="password"
+              value={accessCode}
+              onChange={(e) => setAccessCode(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+              placeholder="请输入访问码"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm mb-4"
+              autoFocus
+            />
+            {loginError && <p className="text-red-500 text-sm mb-3">{loginError}</p>}
+            <button
+              onClick={handleLogin}
+              className="w-full py-3 rounded-xl text-white font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition cursor-pointer"
+            >
+              登录
+            </button>
+            <p className="text-xs text-slate-400 text-center mt-4">访问码请联系管理员获取</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Main form view
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Hero */}
-      <div className="text-center pt-20 pb-12 px-4">
+      <div className="text-center pt-16 pb-10 px-4">
         <h1 className="text-5xl font-bold text-slate-900 mb-3">⚡ Interview Sprint</h1>
         <p className="text-xl text-slate-500 mb-1">晋级突击</p>
         <p className="text-lg text-slate-400">提交简历 + 岗位信息，60秒生成专属面试小抄</p>
@@ -332,19 +385,6 @@ export default function Home() {
 
       {/* Form */}
       <div className="max-w-4xl mx-auto px-4 pb-20">
-        {/* API Key */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-slate-700 mb-1">Anthropic API Key</label>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="sk-ant-..."
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-          />
-          <p className="text-xs text-slate-400 mt-1">在 console.anthropic.com 获取，密钥仅用于本次生成，不会被存储</p>
-        </div>
-
         <div className="grid md:grid-cols-2 gap-6">
           {/* Job info */}
           <div className="bg-white rounded-2xl border border-slate-200 p-6">
@@ -397,7 +437,6 @@ export default function Home() {
           >
             {loading ? "正在分析简历 × JD，生成专属小抄...约 30-60 秒" : "⚡ 一键生成面试小抄"}
           </button>
-          {!apiKey && <p className="text-center text-xs text-slate-400 mt-2">请先输入 API Key</p>}
         </div>
       </div>
     </div>
