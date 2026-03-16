@@ -87,9 +87,9 @@ export async function POST(req: NextRequest) {
     const { company, role, jd, resumeText, accessCode } = await req.json();
 
     // Verify access code
-    const validCode = process.env.ACCESS_CODE || "lemontalk2026";
-    if (accessCode !== validCode) {
-      return NextResponse.json({ error: "访问码无效" }, { status: 401 });
+    const validCode = (process.env.ACCESS_CODE || "lemontalk2026").trim();
+    if (!accessCode || accessCode.trim() !== validCode) {
+      return NextResponse.json({ error: `访问码无效` }, { status: 401 });
     }
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
