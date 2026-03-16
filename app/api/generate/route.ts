@@ -121,6 +121,7 @@ export async function POST(req: NextRequest) {
         ],
         max_tokens: 5000,
         temperature: 0.7,
+        response_format: { type: "json_object" },
       }),
     });
 
@@ -136,6 +137,13 @@ export async function POST(req: NextRequest) {
     if (raw.startsWith("```")) {
       const lines = raw.split("\n");
       raw = lines.slice(1, -1).join("\n");
+    }
+
+    // Extract JSON from response - find first { to last }
+    const jsonStart = raw.indexOf("{");
+    const jsonEnd = raw.lastIndexOf("}");
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      raw = raw.slice(jsonStart, jsonEnd + 1);
     }
 
     const data = JSON.parse(raw);
